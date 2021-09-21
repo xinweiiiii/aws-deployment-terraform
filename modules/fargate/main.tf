@@ -25,12 +25,12 @@ resource "aws_ecr_repository" "inventory_layout_service" {
 
 # ECS cluster
 resource "aws_ecs_cluster" "is458-wms" {
-    name = "is458-wms" # Naming the cluster
+    name = "is458-wms" 
 }
 
 # Create fargate task
 resource "aws_ecs_task_definition" "order-service" {
-    family                   = "order-service" # Naming our first task
+    family                   = "order-service" 
     container_definitions    = <<DEFINITION
     [
         {
@@ -77,26 +77,6 @@ resource "aws_iam_role_policy_attachment" "ecsTaskExecutionRole_policy" {
     policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Create fargate service
-resource "aws_ecs_service" "order-service" {
-    name            = "order-service"                             # Naming our first service
-    cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
-    task_definition = "${aws_ecs_task_definition.order-service.arn}" # Referencing the task our service will spin up
-    launch_type     = "FARGATE"
-    desired_count   = 1 # Setting the number of containers we want deployed to 3
-
-    load_balancer {
-        target_group_arn = "${aws_lb_target_group.order_target_group.arn}" # Referencing our target group
-        container_name   = "${aws_ecs_task_definition.order-service.family}"
-        container_port   = 5000 # Specifying the container port
-    }
-
-    network_configuration {
-        subnets          = "${var.public_subnet}"
-        assign_public_ip = true # Providing our containers with public IPs
-    }
-}
-
 # Create load balancer
 resource "aws_alb" "application_load_balancer" {
     name               = "lb-WMS" # Naming our load balancer
@@ -105,13 +85,14 @@ resource "aws_alb" "application_load_balancer" {
     security_groups = ["${aws_security_group.load_balancer_security_group.id}"]
 }
 
+
 # Creating security group
 resource "aws_security_group" "load_balancer_security_group" {
     vpc_id      = "${var.vpc_id}"
     ingress {
-        from_port   = 0 # Allowing traffic in from port 80
-        to_port     = 0
-        protocol    = "-1" # All
+        from_port   = 80 # Allowing traffic in from port 80
+        to_port     = 80
+        protocol    = "tcp" # All
         cidr_blocks = ["0.0.0.0/0"] # Allowing traffic in from all sources
     }
 
@@ -145,4 +126,45 @@ resource "aws_lb_listener" "listener" {
         target_group_arn = "${aws_lb_target_group.order_target_group.arn}" 
     }
 }
+
+
+# Create fargate service
+resource "aws_ecs_service" "order-service" {
+    name            = "order-service"                             # Naming our first service
+    cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
+    task_definition = "${aws_ecs_task_definition.order-service.arn}" # Referencing the task our service will spin up
+    launch_type     = "FARGATE"
+    desired_count   = 2 # Setting the number of containers we want deployed to 3
+
+    load_balancer {
+        target_group_arn = "${aws_lb_target_group.order_target_group.arn}" # Referencing our target group
+        container_name   = "${aws_ecs_task_definition.order-service.family}"
+        container_port   = 5000 # Specifying the container port
+    }
+
+    network_configuration {
+        subnets          = "${var.public_subnet}"
+        assign_public_ip = true # Providing our containers with public IPs
+        security_groups  = ["${aws_security_group.service_security_group.id}"]
+    }
+}
+
+resource "aws_security_group" "service_security_group" {
+    vpc_id      = "${var.vpc_id}"
+    ingress {
+        from_port = 0
+        to_port   = 0
+        protocol  = "-1"
+        # Only allowing traffic in from the load balancer security group
+        security_groups = ["${aws_security_group.load_balancer_security_group.id}"]
+    }
+
+    egress {
+        from_port   = 0
+        to_port     = 0
+        protocol    = "-1"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+}
+
 
