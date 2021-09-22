@@ -29,6 +29,7 @@ resource "aws_ecs_cluster" "is458-wms" {
 }
 
 # Create fargate task
+# Order Service
 resource "aws_ecs_task_definition" "order-service" {
     family                   = "order-service" 
     container_definitions    = <<DEFINITION
@@ -41,6 +42,33 @@ resource "aws_ecs_task_definition" "order-service" {
             {
             "containerPort": 5000,
             "hostPort": 5000
+            }
+        ],
+        "memory": 512,
+        "cpu": 256
+        }
+    ]
+    DEFINITION
+    requires_compatibilities = ["FARGATE"] # Stating that we are using ECS Fargate
+    network_mode             = "awsvpc"    # Using awsvpc as our network mode as this is required for Fargate
+    memory                   = 512         # Specifying the memory our container requires
+    cpu                      = 256         # Specifying the CPU our container requires
+    execution_role_arn       = "${aws_iam_role.ecsTaskExecutionRole.arn}"
+}
+
+# Inventory Service
+resource "aws_ecs_task_definition" "inventory-service" {
+    family                   = "inventory-service" 
+    container_definitions    = <<DEFINITION
+    [
+        {
+        "name": "inventory-service",
+        "image": "${aws_ecr_repository.inventory_service.repository_url}",
+        "essential": true,
+        "portMappings": [
+            {
+            "containerPort": 5003,
+            "hostPort": 5003
             }
         ],
         "memory": 512,
@@ -113,7 +141,19 @@ resource "aws_lb_target_group" "order_target_group" {
     vpc_id      = "${var.vpc_id}" # Referencing the default VPC
     health_check {
         matcher = "200,301,302"
-        path = "/api/order/healthcheck"
+        path = "/order/healthcheck"
+    }
+}
+
+resource "aws_lb_target_group" "inventory_target_group" {
+    name        = "inventory-target-group"
+    port        = 80
+    protocol    = "HTTP"
+    target_type = "ip"
+    vpc_id      = "${var.vpc_id}" # Referencing the default VPC
+    health_check {
+        matcher = "200,301,302"
+        path = "/inventory/healthcheck"
     }
 }
 
@@ -127,8 +167,39 @@ resource "aws_lb_listener" "listener" {
     }
 }
 
+resource "aws_lb_listener_rule" "redirect_based_on_path_order" {
+    listener_arn = aws_lb_listener.listener.arn
+
+    action {
+        type             = "forward"
+        target_group_arn = aws_lb_target_group.order_target_group.arn
+    }
+
+    condition {
+        path_pattern {
+        values = ["/order/*"]
+        }
+    }
+}
+
+resource "aws_lb_listener_rule" "redirect_based_on_path_inventory" {
+    listener_arn = aws_lb_listener.listener.arn
+
+    action {
+        type             = "forward"
+        target_group_arn = aws_lb_target_group.inventory_target_group.arn
+    }
+
+    condition {
+        path_pattern {
+        values = ["/inventory/*"]
+        }
+    }
+}
+
 
 # Create fargate service
+# Order Service
 resource "aws_ecs_service" "order-service" {
     name            = "order-service"                             # Naming our first service
     cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
@@ -140,6 +211,27 @@ resource "aws_ecs_service" "order-service" {
         target_group_arn = "${aws_lb_target_group.order_target_group.arn}" # Referencing our target group
         container_name   = "${aws_ecs_task_definition.order-service.family}"
         container_port   = 5000 # Specifying the container port
+    }
+
+    network_configuration {
+        subnets          = "${var.public_subnet}"
+        assign_public_ip = true # Providing our containers with public IPs
+        security_groups  = ["${aws_security_group.service_security_group.id}"]
+    }
+}
+
+# Inventory Service
+resource "aws_ecs_service" "inventory-service" {
+    name            = "inventory-service"                             # Naming our first service
+    cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
+    task_definition = "${aws_ecs_task_definition.inventory-service.arn}" # Referencing the task our service will spin up
+    launch_type     = "FARGATE"
+    desired_count   = 2 # Setting the number of containers we want deployed to 3
+
+    load_balancer {
+        target_group_arn = "${aws_lb_target_group.inventory_target_group.arn}" # Referencing our target group
+        container_name   = "${aws_ecs_task_definition.inventory-service.family}"
+        container_port   = 5003 # Specifying the container port
     }
 
     network_configuration {
