@@ -28,7 +28,7 @@ resource "aws_ecs_cluster" "is458-wms" {
     name = "is458-wms" 
 }
 
-# Create fargate task
+# ----------------------------------------- Fargate Task Definition ---------------------------------------
 # Order Service
 resource "aws_ecs_task_definition" "order-service" {
     family                   = "order-service" 
@@ -83,6 +83,90 @@ resource "aws_ecs_task_definition" "inventory-service" {
     execution_role_arn       = "${aws_iam_role.ecsTaskExecutionRole.arn}"
 }
 
+
+# Inventory layout service
+resource "aws_ecs_task_definition" "inventory-layout-service" {
+    family                   = "inventory-layout-service" 
+    container_definitions    = <<DEFINITION
+    [
+        {
+        "name": "inventory-layout-service",
+        "image": "${aws_ecr_repository.inventory_layout_service.repository_url}",
+        "essential": true,
+        "portMappings": [
+            {
+            "containerPort": 5002,
+            "hostPort": 5002
+            }
+        ],
+        "memory": 512,
+        "cpu": 256
+        }
+    ]
+    DEFINITION
+    requires_compatibilities = ["FARGATE"] # Stating that we are using ECS Fargate
+    network_mode             = "awsvpc"    # Using awsvpc as our network mode as this is required for Fargate
+    memory                   = 512         # Specifying the memory our container requires
+    cpu                      = 256         # Specifying the CPU our container requires
+    execution_role_arn       = "${aws_iam_role.ecsTaskExecutionRole.arn}"
+}
+
+# fulfulment service
+resource "aws_ecs_task_definition" "fulfilment-service" {
+    family                   = "fulfilment-service" 
+    container_definitions    = <<DEFINITION
+    [
+        {
+        "name": "fulfilment-service",
+        "image": "${aws_ecr_repository.fulfilment_service.repository_url}",
+        "essential": true,
+        "portMappings": [
+            {
+            "containerPort": 5005,
+            "hostPort": 5005
+            }
+        ],
+        "memory": 512,
+        "cpu": 256
+        }
+    ]
+    DEFINITION
+    requires_compatibilities = ["FARGATE"] # Stating that we are using ECS Fargate
+    network_mode             = "awsvpc"    # Using awsvpc as our network mode as this is required for Fargate
+    memory                   = 512         # Specifying the memory our container requires
+    cpu                      = 256         # Specifying the CPU our container requires
+    execution_role_arn       = "${aws_iam_role.ecsTaskExecutionRole.arn}"
+}
+
+# delivery service
+resource "aws_ecs_task_definition" "delivery-service" {
+    family                   = "delivery-service" 
+    container_definitions    = <<DEFINITION
+    [
+        {
+        "name": "delivery-service",
+        "image": "${aws_ecr_repository.delivery_service.repository_url}",
+        "essential": true,
+        "portMappings": [
+            {
+            "containerPort": 5004,
+            "hostPort": 5004
+            }
+        ],
+        "memory": 512,
+        "cpu": 256
+        }
+    ]
+    DEFINITION
+    requires_compatibilities = ["FARGATE"] # Stating that we are using ECS Fargate
+    network_mode             = "awsvpc"    # Using awsvpc as our network mode as this is required for Fargate
+    memory                   = 512         # Specifying the memory our container requires
+    cpu                      = 256         # Specifying the CPU our container requires
+    execution_role_arn       = "${aws_iam_role.ecsTaskExecutionRole.arn}"
+}
+
+
+# ------------------------------ IAM Permission for the service to assume the role -------------------------------
 # IAM definition
 resource "aws_iam_role" "ecsTaskExecutionRole" {
     name               = "ecsTaskExecutionRole"
@@ -105,6 +189,7 @@ resource "aws_iam_role_policy_attachment" "ecsTaskExecutionRole_policy" {
     policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# -------------------------------------- Load Balancer Setting -----------------------------------
 # Create load balancer
 resource "aws_alb" "application_load_balancer" {
     name               = "lb-WMS" # Naming our load balancer
@@ -132,7 +217,7 @@ resource "aws_security_group" "load_balancer_security_group" {
     }
 }
 
-# LB target group
+# ----------------------------------------- Load Balancer Target Group ---------------------------------------
 resource "aws_lb_target_group" "order_target_group" {
     name        = "order-target-group"
     port        = 80
@@ -157,6 +242,43 @@ resource "aws_lb_target_group" "inventory_target_group" {
     }
 }
 
+resource "aws_lb_target_group" "inventory_layout_target_group" {
+    name        = "inventory-layout-target-group"
+    port        = 80
+    protocol    = "HTTP"
+    target_type = "ip"
+    vpc_id      = "${var.vpc_id}" # Referencing the default VPC
+    health_check {
+        matcher = "200,301,302"
+        path = "/inventory_layout/healthcheck"
+    }
+}
+
+resource "aws_lb_target_group" "fulfilment_target_group" {
+    name        = "fulfilment-target-group"
+    port        = 80
+    protocol    = "HTTP"
+    target_type = "ip"
+    vpc_id      = "${var.vpc_id}" # Referencing the default VPC
+    health_check {
+        matcher = "200,301,302"
+        path = "/fulfilment/healthcheck"
+    }
+}
+
+resource "aws_lb_target_group" "delivery_target_group" {
+    name        = "delivery-target-group"
+    port        = 80
+    protocol    = "HTTP"
+    target_type = "ip"
+    vpc_id      = "${var.vpc_id}" # Referencing the default VPC
+    health_check {
+        matcher = "200,301,302"
+        path = "/delivery/healthcheck"
+    }
+}
+
+# ----------------------------------------- Load Balancer Lister ---------------------------------------
 resource "aws_lb_listener" "listener" {
     load_balancer_arn = "${aws_alb.application_load_balancer.arn}" # Referencing our load balancer
     port              = "80"
@@ -197,8 +319,54 @@ resource "aws_lb_listener_rule" "redirect_based_on_path_inventory" {
     }
 }
 
+resource "aws_lb_listener_rule" "redirect_based_on_path_inventory_layout" {
+    listener_arn = aws_lb_listener.listener.arn
 
-# Create fargate service
+    action {
+        type             = "forward"
+        target_group_arn = aws_lb_target_group.inventory_layout_target_group.arn
+    }
+
+    condition {
+        path_pattern {
+        values = ["/inventory_layout/*"]
+        }
+    }
+}
+
+resource "aws_lb_listener_rule" "redirect_based_on_path_fufilment" {
+    listener_arn = aws_lb_listener.listener.arn
+
+    action {
+        type             = "forward"
+        target_group_arn = aws_lb_target_group.fulfilment_target_group.arn
+    }
+
+    condition {
+        path_pattern {
+        values = ["/fulfilment/*"]
+        }
+    }
+}
+
+resource "aws_lb_listener_rule" "redirect_based_on_path_delivery" {
+    listener_arn = aws_lb_listener.listener.arn
+
+    action {
+        type             = "forward"
+        target_group_arn = aws_lb_target_group.delivery_target_group.arn
+    }
+
+    condition {
+        path_pattern {
+        values = ["/delivery/*"]
+        }
+    }
+}
+
+
+
+# ----------------------------------------- Fargate Backend Services ---------------------------------------
 # Order Service
 resource "aws_ecs_service" "order-service" {
     name            = "order-service"                             # Naming our first service
@@ -241,6 +409,74 @@ resource "aws_ecs_service" "inventory-service" {
     }
 }
 
+# Inventory_layout Service
+resource "aws_ecs_service" "inventory-layout-service" {
+    name            = "inventory-layout-service"                             # Naming our first service
+    cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
+    task_definition = "${aws_ecs_task_definition.inventory-layout-service.arn}" # Referencing the task our service will spin up
+    launch_type     = "FARGATE"
+    desired_count   = 2 # Setting the number of containers we want deployed to 3
+
+    load_balancer {
+        target_group_arn = "${aws_lb_target_group.inventory_layout_target_group.arn}" # Referencing our target group
+        container_name   = "${aws_ecs_task_definition.inventory-layout-service.family}"
+        container_port   = 5002 # Specifying the container port
+    }
+
+    network_configuration {
+        subnets          = "${var.public_subnet}"
+        assign_public_ip = true # Providing our containers with public IPs
+        security_groups  = ["${aws_security_group.service_security_group.id}"]
+    }
+}
+
+# Fulfilment Service
+resource "aws_ecs_service" "fulfilment-service" {
+    name            = "fulfilment-service"                             # Naming our first service
+    cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
+    task_definition = "${aws_ecs_task_definition.fulfilment-service.arn}" # Referencing the task our service will spin up
+    launch_type     = "FARGATE"
+    desired_count   = 2 # Setting the number of containers we want deployed to 3
+
+    load_balancer {
+        target_group_arn = "${aws_lb_target_group.fulfilment_target_group.arn}" # Referencing our target group
+        container_name   = "${aws_ecs_task_definition.fulfilment-service.family}"
+        container_port   = 5005 # Specifying the container port
+    }
+
+    network_configuration {
+        subnets          = "${var.public_subnet}"
+        assign_public_ip = true # Providing our containers with public IPs
+        security_groups  = ["${aws_security_group.service_security_group.id}"]
+    }
+}
+
+# Fulfilment Service
+resource "aws_ecs_service" "delivery-service" {
+    name            = "delivery-service"                             # Naming our first service
+    cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
+    task_definition = "${aws_ecs_task_definition.delivery-service.arn}" # Referencing the task our service will spin up
+    launch_type     = "FARGATE"
+    desired_count   = 2 # Setting the number of containers we want deployed to 3
+
+    load_balancer {
+        target_group_arn = "${aws_lb_target_group.delivery_target_group.arn}" # Referencing our target group
+        container_name   = "${aws_ecs_task_definition.delivery-service.family}"
+        container_port   = 5004 # Specifying the container port
+    }
+
+    network_configuration {
+        subnets          = "${var.public_subnet}"
+        assign_public_ip = true # Providing our containers with public IPs
+        security_groups  = ["${aws_security_group.service_security_group.id}"]
+    }
+}
+
+
+
+
+
+# --------------------------------- Security Group for all fargate services ------------------------
 resource "aws_security_group" "service_security_group" {
     vpc_id      = "${var.vpc_id}"
     ingress {
