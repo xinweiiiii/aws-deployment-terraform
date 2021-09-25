@@ -26,6 +26,11 @@ resource "aws_ecr_repository" "inventory_layout_service" {
 # ECS cluster
 resource "aws_ecs_cluster" "is458-wms" {
     name = "is458-wms" 
+    capacity_providers = ["FARGATE_SPOT", "FARGATE"]
+
+    default_capacity_provider_strategy {
+        capacity_provider = "FARGATE_SPOT"
+    }
 }
 
 # ----------------------------------------- Fargate Task Definition ---------------------------------------
@@ -373,7 +378,7 @@ resource "aws_ecs_service" "order-service" {
     cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
     task_definition = "${aws_ecs_task_definition.order-service.arn}" # Referencing the task our service will spin up
     launch_type     = "FARGATE"
-    desired_count   = 2 # Setting the number of containers we want deployed to 3
+    desired_count   = 1 # Setting the number of containers we want deployed to 3
 
     load_balancer {
         target_group_arn = "${aws_lb_target_group.order_target_group.arn}" # Referencing our target group
@@ -394,7 +399,7 @@ resource "aws_ecs_service" "inventory-service" {
     cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
     task_definition = "${aws_ecs_task_definition.inventory-service.arn}" # Referencing the task our service will spin up
     launch_type     = "FARGATE"
-    desired_count   = 2 # Setting the number of containers we want deployed to 3
+    desired_count   = 1 # Setting the number of containers we want deployed to 3
 
     load_balancer {
         target_group_arn = "${aws_lb_target_group.inventory_target_group.arn}" # Referencing our target group
@@ -415,7 +420,7 @@ resource "aws_ecs_service" "inventory-layout-service" {
     cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
     task_definition = "${aws_ecs_task_definition.inventory-layout-service.arn}" # Referencing the task our service will spin up
     launch_type     = "FARGATE"
-    desired_count   = 2 # Setting the number of containers we want deployed to 3
+    desired_count   = 1 # Setting the number of containers we want deployed to 3
 
     load_balancer {
         target_group_arn = "${aws_lb_target_group.inventory_layout_target_group.arn}" # Referencing our target group
@@ -436,7 +441,7 @@ resource "aws_ecs_service" "fulfilment-service" {
     cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
     task_definition = "${aws_ecs_task_definition.fulfilment-service.arn}" # Referencing the task our service will spin up
     launch_type     = "FARGATE"
-    desired_count   = 2 # Setting the number of containers we want deployed to 3
+    desired_count   = 1 # Setting the number of containers we want deployed to 3
 
     load_balancer {
         target_group_arn = "${aws_lb_target_group.fulfilment_target_group.arn}" # Referencing our target group
@@ -457,7 +462,7 @@ resource "aws_ecs_service" "delivery-service" {
     cluster         = "${aws_ecs_cluster.is458-wms.id}"             # Referencing our created Cluster
     task_definition = "${aws_ecs_task_definition.delivery-service.arn}" # Referencing the task our service will spin up
     launch_type     = "FARGATE"
-    desired_count   = 2 # Setting the number of containers we want deployed to 3
+    desired_count   = 1 # Setting the number of containers we want deployed to 3
 
     load_balancer {
         target_group_arn = "${aws_lb_target_group.delivery_target_group.arn}" # Referencing our target group
@@ -471,9 +476,6 @@ resource "aws_ecs_service" "delivery-service" {
         security_groups  = ["${aws_security_group.service_security_group.id}"]
     }
 }
-
-
-
 
 
 # --------------------------------- Security Group for all fargate services ------------------------
@@ -496,3 +498,203 @@ resource "aws_security_group" "service_security_group" {
 }
 
 
+# ------------------------------- Auto Scaling Group -------------------------------------------
+# Order Service
+resource "aws_appautoscaling_target" "dev_to_target_order" {
+    max_capacity = 3
+    min_capacity = 1
+    resource_id = "service/${aws_ecs_cluster.is458-wms.name}/${aws_ecs_service.order-service.name}"
+    scalable_dimension = "ecs:service:DesiredCount"
+    service_namespace = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "dev_to_memory_order" {
+    name               = "dev-to-memory-order"
+    policy_type        = "TargetTrackingScaling"
+    resource_id        = aws_appautoscaling_target.dev_to_target_order.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_order.scalable_dimension
+    service_namespace  = aws_appautoscaling_target.dev_to_target_order.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+        }
+        target_value       = 80
+    }
+}
+
+resource "aws_appautoscaling_policy" "dev_to_cpu_order" {
+    name = "dev-to-cpu-order"
+    policy_type = "TargetTrackingScaling"
+    resource_id = aws_appautoscaling_target.dev_to_target_order.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_order.scalable_dimension
+    service_namespace = aws_appautoscaling_target.dev_to_target_order.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageCPUUtilization"
+        }
+
+        target_value = 60
+    }
+}
+
+# Inventory
+resource "aws_appautoscaling_target" "dev_to_target_inventory" {
+    max_capacity = 3
+    min_capacity = 1
+    resource_id = "service/${aws_ecs_cluster.is458-wms.name}/${aws_ecs_service.inventory-service.name}"
+    scalable_dimension = "ecs:service:DesiredCount"
+    service_namespace = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "dev_to_memory_inventory" {
+    name               = "dev-to-memory-inventory"
+    policy_type        = "TargetTrackingScaling"
+    resource_id        = aws_appautoscaling_target.dev_to_target_inventory.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_inventory.scalable_dimension
+    service_namespace  = aws_appautoscaling_target.dev_to_target_inventory.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+        }
+        target_value       = 80
+    }
+}
+
+resource "aws_appautoscaling_policy" "dev_to_cpu_inventory" {
+    name = "dev-to-cpu-inventory"
+    policy_type = "TargetTrackingScaling"
+    resource_id = aws_appautoscaling_target.dev_to_target_inventory.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_inventory.scalable_dimension
+    service_namespace = aws_appautoscaling_target.dev_to_target_inventory.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageCPUUtilization"
+        }
+
+        target_value = 60
+    }
+}
+
+# Inventory_Layout
+resource "aws_appautoscaling_target" "dev_to_target_inventory_layout" {
+    max_capacity = 3
+    min_capacity = 1
+    resource_id = "service/${aws_ecs_cluster.is458-wms.name}/${aws_ecs_service.inventory-layout-service.name}"
+    scalable_dimension = "ecs:service:DesiredCount"
+    service_namespace = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "dev_to_memory_inventory_layout" {
+    name               = "dev-to-memory-inventory-layout"
+    policy_type        = "TargetTrackingScaling"
+    resource_id        = aws_appautoscaling_target.dev_to_target_inventory_layout.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_inventory_layout.scalable_dimension
+    service_namespace  = aws_appautoscaling_target.dev_to_target_inventory_layout.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+        }
+        target_value       = 80
+    }
+}
+
+resource "aws_appautoscaling_policy" "dev_to_cpu_inventory_layout" {
+    name = "dev-to-cpu-inventory-layout"
+    policy_type = "TargetTrackingScaling"
+    resource_id = aws_appautoscaling_target.dev_to_target_inventory_layout.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_inventory_layout.scalable_dimension
+    service_namespace = aws_appautoscaling_target.dev_to_target_inventory_layout.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageCPUUtilization"
+        }
+
+        target_value = 60
+    }
+}
+
+# Fulfilment 
+resource "aws_appautoscaling_target" "dev_to_target_fulfilment" {
+    max_capacity = 3
+    min_capacity = 1
+    resource_id = "service/${aws_ecs_cluster.is458-wms.name}/${aws_ecs_service.fulfilment-service.name}"
+    scalable_dimension = "ecs:service:DesiredCount"
+    service_namespace = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "dev_to_memory_fulfilment" {
+    name               = "dev-to-memory-fulfilment"
+    policy_type        = "TargetTrackingScaling"
+    resource_id        = aws_appautoscaling_target.dev_to_target_fulfilment.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_fulfilment.scalable_dimension
+    service_namespace  = aws_appautoscaling_target.dev_to_target_fulfilment.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+        }
+        target_value       = 80
+    }
+}
+
+resource "aws_appautoscaling_policy" "dev_to_cpu_fulfilment" {
+    name = "dev-to-cpu-fulfilment"
+    policy_type = "TargetTrackingScaling"
+    resource_id = aws_appautoscaling_target.dev_to_target_fulfilment.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_fulfilment.scalable_dimension
+    service_namespace = aws_appautoscaling_target.dev_to_target_fulfilment.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageCPUUtilization"
+        }
+
+        target_value = 60
+    }
+}
+
+# Delivery
+resource "aws_appautoscaling_target" "dev_to_target_delivery" {
+    max_capacity = 3
+    min_capacity = 1
+    resource_id = "service/${aws_ecs_cluster.is458-wms.name}/${aws_ecs_service.delivery-service.name}"
+    scalable_dimension = "ecs:service:DesiredCount"
+    service_namespace = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "dev_to_memory_delivery" {
+    name               = "dev-to-memory-delivery"
+    policy_type        = "TargetTrackingScaling"
+    resource_id        = aws_appautoscaling_target.dev_to_target_delivery.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_delivery.scalable_dimension
+    service_namespace  = aws_appautoscaling_target.dev_to_target_delivery.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+        }
+        target_value       = 80
+    }
+}
+
+resource "aws_appautoscaling_policy" "dev_to_cpu_delivery" {
+    name = "dev-to-cpu-delivery"
+    policy_type = "TargetTrackingScaling"
+    resource_id = aws_appautoscaling_target.dev_to_target_delivery.resource_id
+    scalable_dimension = aws_appautoscaling_target.dev_to_target_delivery.scalable_dimension
+    service_namespace = aws_appautoscaling_target.dev_to_target_delivery.service_namespace
+
+    target_tracking_scaling_policy_configuration {
+        predefined_metric_specification {
+        predefined_metric_type = "ECSServiceAverageCPUUtilization"
+        }
+
+        target_value = 60
+    }
+}

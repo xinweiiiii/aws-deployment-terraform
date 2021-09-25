@@ -19,22 +19,22 @@ resource "aws_internet_gateway" "ig"{
     }
 }
 
-# EIP NAT
-resource "aws_eip" "nat_eip"{
-    vpc = true
-    depends_on = [aws_internet_gateway.ig]
-}
+# # EIP NAT
+# resource "aws_eip" "nat_eip"{
+#     vpc = true
+#     depends_on = [aws_internet_gateway.ig]
+# }
 
-# NAT
-resource "aws_nat_gateway" "nat" {
-    allocation_id = "${aws_eip.nat_eip.id}"
-    subnet_id = "${element(aws_subnet.public_subnet.*.id,0)}"
-    depends_on    = [aws_internet_gateway.ig]
-    tags = {
-        Name        = "nat"
-        Environment = "${var.environment}"
-    }
-}
+# # NAT
+# resource "aws_nat_gateway" "nat" {
+#     allocation_id = "${aws_eip.nat_eip.id}"
+#     subnet_id = "${element(aws_subnet.public_subnet.*.id,0)}"
+#     depends_on    = [aws_internet_gateway.ig]
+#     tags = {
+#         Name        = "nat"
+#         Environment = "${var.environment}"
+#     }
+# }
 
 # Public Subnet
 resource "aws_subnet" "public_subnet" {
@@ -78,21 +78,21 @@ resource "aws_route" "public_internet_gateway" {
     gateway_id             = "${aws_internet_gateway.ig.id}"
 }
 
-# Route table for private subnet 
-resource "aws_route_table" "private" {
-    vpc_id = "${aws_vpc.vpc.id}"
-    tags = {
-        Name        = "${var.environment}-private-route-table"
-        Environment = "${var.environment}"
-    }
-}
+# # Route table for private subnet 
+# resource "aws_route_table" "private" {
+#     vpc_id = "${aws_vpc.vpc.id}"
+#     tags = {
+#         Name        = "${var.environment}-private-route-table"
+#         Environment = "${var.environment}"
+#     }
+# }
 
-# Attach nat gateway to Route table
-resource "aws_route" "private_nat_gateway" {
-    route_table_id         = "${aws_route_table.private.id}"
-    destination_cidr_block = "0.0.0.0/0"
-    nat_gateway_id         = "${aws_nat_gateway.nat.id}"
-}
+# # Attach nat gateway to Route table
+# resource "aws_route" "private_nat_gateway" {
+#     route_table_id         = "${aws_route_table.private.id}"
+#     destination_cidr_block = "0.0.0.0/0"
+#     nat_gateway_id         = "${aws_nat_gateway.nat.id}"
+# }
 
 # Associate route table to subnet
 resource "aws_route_table_association" "public" {
@@ -101,11 +101,11 @@ resource "aws_route_table_association" "public" {
     route_table_id = "${aws_route_table.public.id}"
 }
 
-resource "aws_route_table_association" "private" {
-    count          = "${length(var.private_subnets_cidr)}"
-    subnet_id      = "${element(aws_subnet.private_subnet.*.id, count.index)}"
-    route_table_id = "${aws_route_table.private.id}"
-}
+# resource "aws_route_table_association" "private" {
+#     count          = "${length(var.private_subnets_cidr)}"
+#     subnet_id      = "${element(aws_subnet.private_subnet.*.id, count.index)}"
+#     route_table_id = "${aws_route_table.private.id}"
+# }
 
 # TODO: Need to refine after we get all the services SG
 # Create default security group to allow all traffic within the VPC
