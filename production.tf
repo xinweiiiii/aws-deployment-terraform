@@ -16,3 +16,8 @@ module "fargate" {
     private_subnet = module.networking.private_subnet
     public_subnet = module.networking.public_subnet
 }
+
+module "dynamo" {
+    
+    source = "./modules/dynamo"
+}
