@@ -18,6 +18,14 @@ module "fargate" {
 }
 
 module "dynamo" {
-    
     source = "./modules/dynamo"
+}
+
+module "cloudwatch-event" {
+    source = "./modules/cloudwatch-event"
+}
+
+module "waf" {
+    source = "./modules/waf"
+    ALB = module.fargate.ALB
 }

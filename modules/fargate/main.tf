@@ -49,6 +49,14 @@ resource "aws_ecs_task_definition" "order-service" {
             "hostPort": 5000
             }
         ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": "order-service",
+                "awslogs-region": "ap-southeast-1",
+                "awslogs-stream-prefix": "ecs"
+            }
+        },
         "memory": 512,
         "cpu": 256
         }
@@ -76,6 +84,14 @@ resource "aws_ecs_task_definition" "inventory-service" {
             "hostPort": 5003
             }
         ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": "inventory-service",
+                "awslogs-region": "ap-southeast-1",
+                "awslogs-stream-prefix": "ecs"
+            }
+        },
         "memory": 512,
         "cpu": 256
         }
@@ -104,6 +120,14 @@ resource "aws_ecs_task_definition" "inventory-layout-service" {
             "hostPort": 5002
             }
         ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": "inventory-layout-service",
+                "awslogs-region": "ap-southeast-1",
+                "awslogs-stream-prefix": "ecs"
+            }
+        },
         "memory": 512,
         "cpu": 256
         }
@@ -131,6 +155,14 @@ resource "aws_ecs_task_definition" "fulfilment-service" {
             "hostPort": 5005
             }
         ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": "fulfilment-service",
+                "awslogs-region": "ap-southeast-1",
+                "awslogs-stream-prefix": "ecs"
+            }
+        },
         "memory": 512,
         "cpu": 256
         }
@@ -158,6 +190,14 @@ resource "aws_ecs_task_definition" "delivery-service" {
             "hostPort": 5004
             }
         ],
+        "logConfiguration": {
+            "logDriver": "awslogs",
+            "options": {
+                "awslogs-group": "delivery-service",
+                "awslogs-region": "ap-southeast-1",
+                "awslogs-stream-prefix": "ecs"
+            }
+        },
         "memory": 512,
         "cpu": 256
         }
