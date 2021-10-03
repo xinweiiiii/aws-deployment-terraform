@@ -29,3 +29,8 @@ module "waf" {
     source = "./modules/waf"
     ALB = module.fargate.ALB
 }
+
+module "api_gateway" {
+    source = "./modules/api_gateway"
+    ALB_DNS = module.fargate.ALB_DNS
+}
