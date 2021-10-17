@@ -30,8 +30,8 @@ resource "aws_api_gateway_integration" "integration" {
 }
 
 resource "aws_api_gateway_domain_name" "domain" {
-  domain_name = "api.wms.engineer"
-  certificate_arn = "arn:aws:acm:us-east-1:972988805757:certificate/69041e46-17b9-4bfc-a017-18252ab85b75"
+  domain_name = "api.warehousefeed.me"
+  certificate_arn = "arn:aws:acm:us-east-1:972988805757:certificate/43f71144-c957-47e1-a616-dae9526462a5"
 
 }
 
