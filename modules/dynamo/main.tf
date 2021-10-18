@@ -18,7 +18,7 @@ resource "aws_backup_plan" "dynamodb_backup" {
   rule {
     rule_name         = "dynamodb_backup_rule"
     target_vault_name = "${aws_backup_vault.dynamodb_backup_vault.name}"
-    schedule          = "cron(0 12 * * ? *)"
+    schedule          = "cron(0 15 * * ? *)"
   }
 }
 
@@ -49,7 +49,7 @@ resource "aws_iam_role_policy_attachment" "dynamodb_backup_role_policy" {
 }
 
 resource "aws_backup_selection" "example" {
-  iam_role_arn = "${aws_iam_role.example.arn}"
+  iam_role_arn = "${aws_iam_role.dynamodb_backup_role.arn}"
   name         = "dynamo_db_backup_selection"
   plan_id      = "${aws_backup_plan.dynamodb_backup.id}"
 
