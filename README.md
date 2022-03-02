@@ -9,6 +9,7 @@ Sample terraform code for the following services
 - DynamoDB
 - Cloudwatch Event
 
+[Project Architecture](https://github.com/xinweiiiii/aws-deployment-terraform/blob/main/photo_2021-10-07_18-56-29.jpg)
 
 ## Run Deployment
 Before running do ensure that you have your AWS Cli configured. [Instruction](https://docs.aws.amazon.com/cli/latest/userguide/cli-chap-configure.html)
